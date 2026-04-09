@@ -1,4 +1,6 @@
 <?php
+set_time_limit(0);
+
 require __DIR__ . '/vendor/autoload.php';
 
 use React\Http\HttpServer;
@@ -10,9 +12,10 @@ use React\EventLoop\Loop;
 $loop = Loop::get();
 
 // Logica del servidor
-$server = new HttpServer(function (ServerRequestInterface $request) use ($filesystem) {
+$server = new HttpServer(function (ServerRequestInterface $request) {
     
     // Obtener la ruta del usuario
+    $method = $request->getMethod();
     $path = $request->getUri()->getPath();
     
     // Funcion para leer los archivos
@@ -46,9 +49,19 @@ $server = new HttpServer(function (ServerRequestInterface $request) use ($filesy
         }
     }
 
-    // Ruta de contacto
     if ($path === '/contact') {
-        return $serveFile('contact.html', 'text/html');
+        if ($method === 'GET') {
+            // Entregar el HTML
+            return new Response(200, ['Content-Type' => 'text/html'], file_get_contents(__DIR__ . '/public/contact.html'));
+        } 
+        
+        if ($method === 'POST') {
+            // Recibir datos asíncronamente
+            $data = json_decode((string)$request->getBody(), true);
+            
+            // Por ahora, simulamos una respuesta exitosa
+            return new Response(200, ['Content-Type' => 'application/json'], json_encode(['status' => 'success']));
+        }
     }
 
     // Manejo de error cuando se busca una ruta que no existe
