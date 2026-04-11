@@ -47,11 +47,19 @@
                             <input type="email" class="form-control bg-light" id="email" name="email" required>
                         </div>
                         <div class="mb-3">
-                            <label for="mensaje" class="form-label">Mensaje o Sugerencia</label>
-                            <textarea class="form-control bg-light" id="mensaje" name="mensaje" rows="4" required></textarea>
+                            <label for="titulo" class="form-label">Título del libro solicitado</label>
+                            <input type="text" class="form-control bg-light" id="titulo" name="titulo" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="autor" class="form-label">Autor (si lo conoces)</label>
+                            <input type="text" class="form-control bg-light" id="autor" name="autor">
+                        </div>
+                        <div class="mb-3">
+                            <label for="mensaje" class="form-label">Mensaje o Información adicional</label>
+                            <textarea class="form-control bg-light" id="mensaje" name="mensaje" rows="4"></textarea>
                         </div>
                         <div class="d-grid">
-                            <button type="submit" class="btn btn-dark py-2 text-uppercase">Enviar Mensaje</button>
+                            <button type="submit" class="btn btn-dark py-2 text-uppercase">Enviar Solicitud</button>
                         </div>
                     </form>
                     <div id="response-msg" class="mt-3 text-center d-none"></div>
@@ -65,26 +73,33 @@
     </footer>
 
     <script>
-        // Opcional: Manejar el envío vía AJAX para que sea 100% Event-Driven en el frontend
-        document.getElementById('contact-form').addEventListener('submit', function(e) {
-            e.preventDefault();
-            const formData = new FormData(this);
-            const data = Object.fromEntries(formData.entries());
+        const form = document.getElementById('contact-form');
+        const msgDiv = document.getElementById('response-msg');
+        const showMessage = (text, error = false) => {
+            msgDiv.className = `mt-3 text-center alert ${error ? 'alert-danger' : 'alert-success'} border-0 rounded-0`;
+            msgDiv.textContent = text;
+            msgDiv.classList.remove('d-none');
+        };
 
-            fetch('/contact', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(data)
-            })
-            .then(res => res.json())
-            .then(response => {
-                const msgDiv = document.getElementById('response-msg');
-                msgDiv.className = "mt-3 text-center alert alert-success border-0 rounded-0";
-                msgDiv.textContent = "Mensaje enviado con éxito.";
-                msgDiv.classList.remove('d-none');
-                this.reset();
-            })
-            .catch(err => console.error("Error:", err));
+        form.addEventListener('submit', async e => {
+            e.preventDefault();
+            const data = Object.fromEntries(new FormData(form).entries());
+            try {
+                const res = await fetch('/contact', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                const body = await res.json();
+                if (!res.ok || body.error) {
+                    return showMessage(body.error || 'No se pudo enviar la solicitud.', true);
+                }
+                showMessage('Solicitud enviada con éxito. Gracias por contactarnos.');
+                form.reset();
+            } catch (err) {
+                console.error(err);
+                showMessage('No se pudo enviar la solicitud. Intenta nuevamente más tarde.', true);
+            }
         });
     </script>
 </body>

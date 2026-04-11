@@ -37,15 +37,19 @@
     <main class="container">
         <div class="d-flex justify-content-between align-items-center mb-4">
             <h2 class="h4 mb-0">Listado General</h2>
-            <button id="btn-refresh" class="btn btn-dark px-4">Actualizar Catálogo</button>
+            <div>
+                <button id="btn-add" class="btn btn-outline-primary me-2 px-4">Nuevo Libro</button>
+                <button id="btn-refresh" class="btn btn-dark px-4">Actualizar Catálogo</button>
+            </div>
         </div>
+        <div id="delete-message" class="alert alert-danger d-none" role="alert"></div>
 
         <div class="card shadow-sm">
             <div class="table-responsive">
                 <table class="table table-hover mb-0">
                     <thead>
                         <tr>
-                            <th class="border-0">ID</th>
+                            <th class="border-0">ISBN</th>
                             <th class="border-0">Título</th>
                             <th class="border-0">Autor</th>
                             <th class="border-0">Estado</th>
@@ -64,22 +68,142 @@
         </div>
     </main>
 
+    <div class="modal fade" id="bookModal" tabindex="-1" aria-labelledby="bookModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow-sm">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="bookModalLabel">Nuevo Libro</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <form id="book-form">
+                    <div class="modal-body">
+                        <div id="book-modal-error" class="alert alert-danger d-none" role="alert"></div>
+                        <input type="hidden" id="book-id">
+                        <div class="mb-3">
+                            <label for="book-titulo" class="form-label">Título</label>
+                            <input type="text" class="form-control" id="book-titulo" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="book-autor" class="form-label">Autor</label>
+                            <input type="text" class="form-control" id="book-autor" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="book-isbn" class="form-label">ISBN</label>
+                            <input type="text" class="form-control" id="book-isbn" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="book-estado" class="form-label">Estado</label>
+                            <select class="form-select" id="book-estado" required>
+                                <option value="disponible">Disponible</option>
+                                <option value="prestado">Prestado</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-primary">Guardar</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="deleteConfirmModal" tabindex="-1" aria-labelledby="deleteConfirmModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow-sm">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="deleteConfirmModalLabel">Eliminar libro</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body">
+                    <p id="delete-confirm-message">¿Estás seguro de que deseas eliminar este libro?</p>
+                    <input type="hidden" id="delete-book-id">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-danger" id="confirm-delete-btn">Eliminar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <footer class="container py-5 mt-5 border-top text-center text-muted small">
         &copy; 2026 Universidad Don Bosco - Investigación Aplicada 2. [cite: 1, 2]
     </footer>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        // Lógica básica para conectar con tu ruta /data más adelante
-        document.getElementById('btn-refresh').addEventListener('click', () => {
-            fetch('/data')
-                .then(response => response.json())
-                .then(data => {
-                    console.log("Datos recibidos:", data);
-                    // Aquí el Dev B y tú integrarán el llenado de la tabla [cite: 114]
-                })
-                .catch(err => console.error("Error al cargar datos:", err));
+        const g=id=>document.getElementById(id);
+        const tableEl=g('tabla-libros'), refreshButton=g('btn-refresh'), bookModal=new bootstrap.Modal(g('bookModal')),
+            bookForm=g('book-form'), bookModalTitle=g('bookModalLabel'), bookIdInput=g('book-id'),
+            bookTituloInput=g('book-titulo'), bookAutorInput=g('book-autor'), bookIsbnInput=g('book-isbn'),
+            bookEstadoInput=g('book-estado'), bookModalError=g('book-modal-error'), deleteMessage=g('delete-message'),
+            deleteConfirmModal=new bootstrap.Modal(g('deleteConfirmModal')), deleteConfirmButton=g('confirm-delete-btn'),
+            deleteConfirmMessage=g('delete-confirm-message'), deleteBookIdInput=g('delete-book-id');
+        const rowsCache = [];
+        const showDeleteMessage = m => { deleteMessage.textContent = m; deleteMessage.classList.remove('d-none'); setTimeout(() => deleteMessage.classList.add('d-none'), 5000); };
+        const escapeHtml = v => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        const showError = m => { tableEl.innerHTML = `<tr><td colspan="5" class="text-center py-5 text-danger">${m}</td></tr>`; };
+        const resetModal = () => { bookModalError.classList.add('d-none'); bookModalError.textContent = ''; bookIdInput.value = ''; bookTituloInput.value = ''; bookAutorInput.value = ''; bookIsbnInput.value = ''; bookEstadoInput.value = 'disponible'; };
+        const getRow = id => rowsCache.find(r => String(r.id) === String(id));
+        const openBookModal = (mode, book = null) => { resetModal(); if (book) { bookIdInput.value = book.id; bookTituloInput.value = book.titulo; bookAutorInput.value = book.autor; bookIsbnInput.value = book.isbn ?? book.ISBN ?? ''; bookEstadoInput.value = book.estado; } bookModalTitle.textContent = mode === 'edit' ? 'Editar Libro' : 'Nuevo Libro'; bookModal.show(); };
+        const attachRowActions = () => {
+            document.querySelectorAll('.btn-edit').forEach(btn => btn.addEventListener('click', () => openBookModal('edit', getRow(btn.dataset.id))));
+            document.querySelectorAll('.btn-delete').forEach(btn => btn.addEventListener('click', () => { deleteBookIdInput.value = btn.dataset.id; deleteConfirmMessage.textContent = `¿Eliminar el libro “${getRow(btn.dataset.id)?.titulo || ''}”?`; deleteConfirmModal.show(); }));
+        };
+        const renderTable = rows => {
+            if (!Array.isArray(rows) || !rows.length) {
+                tableEl.innerHTML = `<tr><td colspan="5" class="text-center py-5 text-muted">No se encontró ningún libro en el inventario.</td></tr>`;
+                return;
+            }
+            tableEl.innerHTML = rows.map(r => `<tr><td>${escapeHtml(r.isbn ?? r.ISBN ?? '')}</td><td>${escapeHtml(r.titulo)}</td><td>${escapeHtml(r.autor)}</td><td class="text-capitalize">${escapeHtml(r.estado)}</td><td><button class="btn btn-sm btn-outline-primary btn-edit me-2" data-id="${r.id}">Editar</button><button class="btn btn-sm btn-outline-danger btn-delete" data-id="${r.id}">Eliminar</button></td></tr>`).join('');
+        };
+        const loadInventory = async () => {
+            try {
+                const res = await fetch('/data');
+                const data = await res.json();
+                if (data.error) return showError(data.error);
+                rowsCache.splice(0, rowsCache.length, ...data);
+                renderTable(data);
+                attachRowActions();
+            } catch (err) {
+                console.error(err);
+                showError('No se pudo obtener la información del servidor.');
+            }
+        };
+        bookForm.addEventListener('submit', async e => {
+            e.preventDefault();
+            const id = bookIdInput.value;
+            const titulo = bookTituloInput.value.trim();
+            const autor = bookAutorInput.value.trim();
+            const isbn = bookIsbnInput.value.trim();
+            const estado = bookEstadoInput.value;
+            if (!titulo || !autor || !isbn) {
+                bookModalError.textContent = 'Título, autor e ISBN son obligatorios.';
+                bookModalError.classList.remove('d-none');
+                return;
+            }
+            const res = await fetch(id ? `/books/${id}` : '/books', { method: id ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ titulo, autor, isbn, estado }) });
+            const data = await res.json();
+            if (!res.ok || data.error) {
+                bookModalError.textContent = data.error || 'Error al guardar el libro.';
+                bookModalError.classList.remove('d-none');
+                return;
+            }
+            bookModal.hide();
+            loadInventory();
         });
+        deleteConfirmButton.addEventListener('click', async () => {
+            deleteConfirmModal.hide();
+            const id = deleteBookIdInput.value;
+            const res = await fetch(`/books/${id}`, { method: 'DELETE' });
+            const data = await res.json();
+            if (!res.ok || data.error) return showDeleteMessage(data.error || 'Error al eliminar el libro.');
+            loadInventory();
+        });
+        refreshButton.addEventListener('click', loadInventory);
+        g('btn-add').addEventListener('click', () => openBookModal('create'));
+        loadInventory();
     </script>
 </body>
 </html>
