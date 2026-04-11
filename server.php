@@ -5,7 +5,6 @@ use React\Http\HttpServer;
 use React\Http\Message\Response;
 use Psr\Http\Message\ServerRequestInterface;
 use React\EventLoop\Loop;
-use React\MySQL\Factory;
 
 // Configuración de la base de datos
 $dbHost = getenv('MYSQL_HOST') ?: '127.0.0.1';
@@ -18,19 +17,11 @@ function sanitizeInput(string $value): string {
     return htmlspecialchars(strip_tags(trim($value)), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 }
 
-// Configurar la conexión a MySQL con promesas
-$factory = new Factory($loop);
-$dbUrl = 'root:@127.0.0.1:3306/biblioteca_db';
-$connection = $factory->createLazyConnection($dbUrl);
-
 // Logica del servidor
-<<<<<<< Updated upstream
-$server = new HttpServer(function (ServerRequestInterface $request) use ($connection) {
-=======
 $server = new HttpServer(function (ServerRequestInterface $request) use ($dbHost, $dbPort, $dbUser, $dbPass, $dbName) {
->>>>>>> Stashed changes
     
     // Obtener la ruta del usuario
+    $method = $request->getMethod();
     $path = $request->getUri()->getPath();
     
     // Funcion para leer los archivos
@@ -64,27 +55,6 @@ $server = new HttpServer(function (ServerRequestInterface $request) use ($dbHost
         }
     }
 
-<<<<<<< Updated upstream
-    // Ruta para obtener libros desde la base de datos
-    if ($path === '/data' || $path === '/api/libros') {
-        return $connection->query('SELECT * FROM libros')->then(
-            function ($command) {
-                return new Response(
-                    200,
-                    ['Content-Type' => 'application/json'],
-                    json_encode($command->resultRows, JSON_UNESCAPED_UNICODE)
-                );
-            },
-            function (\Exception $error) {
-                return new Response(500, ['Content-Type' => 'text/plain'], 'Error en la base de datos: ' . $error->getMessage());
-            }
-        );
-    }
-
-    // Ruta de contacto
-    if ($path === '/contact') {
-        return $serveFile('contact.html', 'text/html');
-=======
     if ($path === '/data') {
         if ($method !== 'GET') {
             return new Response(405, ['Content-Type' => 'application/json'], json_encode(['error' => 'Método no permitido']));
@@ -283,7 +253,6 @@ $server = new HttpServer(function (ServerRequestInterface $request) use ($dbHost
 
             return new Response(200, ['Content-Type' => 'application/json'], json_encode(['status' => 'success']));
         }
->>>>>>> Stashed changes
     }
 
     // Manejo de error cuando se busca una ruta que no existe
